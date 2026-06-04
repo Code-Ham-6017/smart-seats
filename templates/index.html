@@ -79,9 +79,27 @@
         <button type="button" class="tab-btn" id="btn-pair" onclick="selectMainMode('mixed')">짝꿍 모드 (자동 매칭)</button>
     </div>
 
-    <form action="/generate" method="POST" id="seatForm" onsubmit="appendDisabledSeats()">
+<form action="/generate" method="POST" id="seatForm" onsubmit="appendDisabledSeats()">
         <input type="hidden" name="pair_mode" id="pair_mode_input" value="none">
         <input type="hidden" name="disabled_seats" id="disabled_seats_input" value="">
+
+        <div class="setting-card" style="margin-bottom: 20px;">
+            <div class="section-title">🏫 학급 정보 설정 (우리 반 보관함 개설용)</div>
+            <div class="input-group" style="display: flex; gap: 15px;">
+                <div class="input-item" style="flex: 2;">
+                    <label>✏️ 학교명</label>
+                    <input type="text" name="school" placeholder="예: 중앙초등학교" required style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div class="input-item" style="flex: 1;">
+                    <label>🔢 학년</label>
+                    <input type="number" name="grade" min="1" max="6" placeholder="학년" required style="width: 100%; box-sizing: border-box;">
+                </div>
+                <div class="input-item" style="flex: 1;">
+                    <label>🌱 반</label>
+                    <input type="number" name="class_num" min="1" max="20" placeholder="반" required style="width: 100%; box-sizing: border-box;">
+                </div>
+            </div>
+        </div>
 
         <div class="setting-card">
             <div class="section-title">📐 교실 배치도 디자인 (크기 지정 후 칸을 클릭해 통로로 설정하세요)</div>

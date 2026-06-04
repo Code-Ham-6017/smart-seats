@@ -4,9 +4,14 @@ import json
 def init_db():
     conn = sqlite3.connect("history.db")
     cursor = conn.cursor()
+    # 🏫 자리 배치 이력에 학교, 학년, 반, 생성한 교사 ID(username) 필드를 추가합니다.
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS seat_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id TEXT PRIMARY KEY,
+            username TEXT,
+            school TEXT,
+            grade TEXT,
+            class_num TEXT,
             seat_data TEXT NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -17,16 +22,19 @@ def init_db():
 def init_user_db():
     conn = sqlite3.connect("history.db")
     cursor = conn.cursor()
-    # 💡 username의 UNIQUE 제약조건을 제거하여 동일 아이디 가입이 가능하도록 수정합니다.
+    # 🏫 회원가입 테이블(users)에 가입 시 선택한 학교, 학년, 반 필드를 추가합니다.
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
             password TEXT NOT NULL,
-            role TEXT NOT NULL
+            role TEXT NOT NULL,
+            school TEXT,
+            grade TEXT,
+            class_num TEXT
         )
     """)
-    # 📝 학생 명단 관리를 위한 새로운 테이블 추가 (반 이름, 남학생 명단, 여학생 명단)
+    # 학생 명단 관리 테이블 (기존 유지)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS student_lists (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,3 +126,88 @@ def get_all_student_lists():
     lists = cursor.fetchall()
     conn.close()
     return lists
+
+import sqlite3
+
+def init_db():
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+    # 학교, 학년, 반 필드(Column)를 추가하여 테이블을 생성합니다.
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS seat_history (
+            id TEXT PRIMARY KEY,
+            teacher_id TEXT,
+            school TEXT,
+            grade TEXT,
+            class_num TEXT,
+            seats_data TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+def save_seat_history(seat_id, teacher_id, school, grade, class_num, seats_data):
+    import json
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+    # 3개에서 5개의 메타데이터를 저장하도록 확장
+    cursor.execute(
+        "INSERT INTO seat_history (id, teacher_id, school, grade, class_num, seats_data) VALUES (?, ?, ?, ?, ?, ?)",
+        (seat_id, teacher_id, school, grade, class_num, json.dumps(seats_data, ensure_ascii=False))
+    )
+    conn.commit()
+    conn.close()
+
+# 우리 반의 과거 배정 이력만 쏙 골라서 가져오는 함수 추가
+def get_class_history(school, grade, class_num):
+    import json
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, teacher_id, seats_data, created_at FROM seat_history WHERE school = ? AND grade = ? AND class_num = ? ORDER BY created_at DESC",
+        (school, grade, class_num)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    
+    history = []
+    for row in rows:
+        history.append({
+            'id': row[0],
+            'teacher_id': row[1],
+            'seats': json.loads(row[2]),
+            'created_at': row[3]
+        })
+    return history
+
+# 📝 회원가입 처리 함수 (기존 role과 새로운 학급 정보를 함께 저장)
+def register_user(username, password, school, grade, class_num):
+    import sqlite3
+    conn = sqlite3.connect("history.db")
+    cursor = conn.cursor()
+    try:
+        # role 자리에 'teacher'를 명확하게 꽂아줍니다.
+        cursor.execute(
+            "INSERT INTO users (username, password, role, school, grade, class_num) VALUES (?, ?, ?, ?, ?, ?)",
+            (username, password, 'teacher', school, grade, class_num)
+        )
+        conn.commit()
+        success = True
+    except Exception as e:
+        print(f"❌ 회원가입 DB 저장 에러: {e}")
+        success = False
+    conn.close()
+    return success
+
+# 🔍 [에러 원인!] 로그인 성공 시 유저의 학급 정보를 한꺼번에 세션에 담기 위해 가져오는 함수
+def get_user_info(username):
+    import sqlite3
+    conn = sqlite3.connect("history.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT username, school, grade, class_num FROM users WHERE username = ?", (username,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {'username': row[0], 'school': row[1], 'grade': row[2], 'class_num': row[3]}
+    return None
