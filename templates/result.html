@@ -121,12 +121,16 @@
     function allowDrop(e) {
         e.preventDefault();
         const cell = e.target.closest('.seat-cell');
-        if (cell && !cell.classList.contains('path-way')) cell.classList.add('drag-over');
+        if (cell && !cell.classList.contains('path-way')) {
+            cell.classList.add('drag-over');
+        }
     }
 
     function dragLeave(e) {
         const cell = e.target.closest('.seat-cell');
-        if (cell) cell.classList.remove('drag-over');
+        if (cell) {
+            cell.classList.remove('drag-over');
+        }
     }
 
     function drop(e) {
@@ -144,20 +148,16 @@
         cell.appendChild(draggedElement);
     }
 
-    // 🔄 현재 설정된 학생들과 배치 옵션 구조를 그대로 유지한 채 서브밋을 다시 날리는 함수
     function reRollSeats() {
-        // 부모 창(index.html)의 캐시를 기반으로 폼 서브밋 요청을 복제 생성하거나 브라우저 히스토리백 후 재서브밋 유도
-        // 가장 안전한 방법은 메인 홈의 폼 데이터를 세션/로컬 스토리지로 연동해 요청하는 것이나, 
-        // 유저 편의를 위해 메인 화면으로 돌아가 바로 버튼을 눌러주는 효과를 냅니다.
-        const parentForm = window.opener ? window.opener.document.getElementById('seatForm') : null;
-        if (parentForm) {
-            parentForm.submit();
-            window.close(); // 현재 결과창 닫기
-        } else {
-            // 단독 창일 경우 홈으로 리다이렉트 처리
-            alert("새로운 배정을 위해 메인 설정으로 이동합니다. 배정 시작하기를 한 번 더 눌러주세요!");
-            window.location.href = "/";
+        if (window.opener) {
+            const parentForm = window.opener.document.getElementById('seatForm');
+            if (parentForm) {
+                parentForm.submit();
+                window.close();
+                return;
+            }
         }
+        window.location.reload();
     }
 </script>
 </body>
