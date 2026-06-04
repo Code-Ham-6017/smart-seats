@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스마트 자리 바꾸기 - 구조 디자인</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --bg-light: #f9fafb;
+            --border-color: #e5e7eb;
+            --text-main: #1f2937;
+        }
+        body { font-family: 'Pretendard', sans-serif; background-color: #f3f4f6; margin: 0; padding: 20px; color: var(--text-main); padding-bottom: 80px; }
+        .container { max-width: 900px; margin: 40px auto; background: white; border-radius: 20px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); padding: 40px; }
+        h1 { text-align: center; color: var(--text-main); font-size: 28px; margin-bottom: 30px; letter-spacing: -1px; }
+        .mode-tabs { display: flex; gap: 10px; margin-bottom: 30px; background: #f3f4f6; padding: 6px; border-radius: 12px; }
+        .tab-btn { flex: 1; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; color: #6b7280; background: transparent; }
+        .tab-btn.active { background: white; color: var(--primary-color); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .setting-card { background: var(--bg-light); border: 1px solid var(--border-color); border-radius: 16px; padding: 25px; margin-bottom: 20px; }
+        .section-title { font-weight: 700; color: var(--text-main); margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+        
+        /* 🪑 교실 레이아웃 그리드 스타일 */
+        .grid-designer { display: grid; gap: 10px; margin-top: 15px; background: #e5e7eb; padding: 15px; border-radius: 12px; justify-content: center; }
+        .grid-cell { 
+            width: 60px; height: 60px; background: white; border: 2px solid #cbd5e1; border-radius: 8px; 
+            display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; 
+            cursor: pointer; user-select: none; transition: all 0.15s; color: #64748b;
+        }
+        .grid-cell.active { background: #e0e7ff; border-color: var(--primary-color); color: var(--primary-color); font-weight: 700; box-shadow: inset 0 0 0 2px rgba(79, 70, 229, 0.1); }
+        .grid-cell.disabled { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; text-decoration: line-through; opacity: 0.6; }
+        
+        .pair-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
+        .pair-opt-card { background: white; border: 1px solid var(--border-color); padding: 12px; border-radius: 10px; display: flex; align-items: center; gap: 10px; cursor: pointer; transition: 0.2s; }
+        .input-group { display: flex; gap: 15px; margin-bottom: 20px; }
+        .input-item { flex: 1; }
+        label { font-size: 14px; font-weight: 600; color: #4b5563; margin-bottom: 6px; display: block; }
+        input[type="number"], textarea, select { width: 100%; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; font-size: 15px; box-sizing: border-box; background: white; color: black; }
+        textarea { resize: vertical; min-height: 100px; }
+        .submit-btn { width: 100%; background: var(--primary-color); color: white; border: none; padding: 18px; border-radius: 12px; font-size: 18px; font-weight: 700; cursor: pointer; transition: 0.3s; margin-top: 10px; }
+        .submit-btn:hover { background: #4338ca; transform: translateY(-2px); }
+        .hidden { display: none !important; }
+        .nav-buttons { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; gap: 10px; }
+        .nav-btn { background: #e5e7eb; color: #374151; padding: 10px 18px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; display: inline-block; }
+        .nav-btn:hover { background: #d1d5db; }
+
+        .fixed-logout-zone { position: fixed; bottom: 25px; right: 25px; display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.95); padding: 10px 16px; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); border: 1px solid #e5e7eb; z-index: 9999; backdrop-filter: blur(4px); }
+        .user-welcome { font-size: 13px; font-weight: 600; color: #4b5563; }
+        .logout-trigger { background: #fee2e2; color: #ef4444; text-decoration: none; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 20px; transition: all 0.2s; }
+        .logout-trigger:hover { background: #fca5a5; color: #b91c1c; }
+    </style>
+</head>
+<body>
+
+<div class="fixed-logout-zone">
+    <span class="user-welcome">👩‍🏫 {{ user.username }}님 로그인 중</span>
+    <a href="/logout" class="logout-trigger">🚪 로그아웃</a>
+</div>
+
+<div class="container">
+    <div class="nav-buttons">
+        <div>
+            <select id="quick_load" onchange="quickLoadStudents(this)" style="width: auto; display: inline-block; padding: 8px 12px;">
+                <option value="">🏫 저장된 학급 명단 선택 불러오기</option>
+                {% for c in classes %}
+                    <option value="{{ c.class_name }}" data-male="{{ c.male_students }}" data-female="{{ c.female_students }}">{{ c.class_name }}</option>
+                {% endfor %}
+            </select>
+            <a href="/students" class="nav-btn" style="background:#10b981; color:white; margin-left: 8px;">📝 명단 대장 관리</a>
+        </div>
+        <a href="/history" class="nav-btn">📜 과거 배정 기록 목록</a>
+    </div>
+
+    <h1>🎓 스마트 자리 바꾸기</h1>
+
+    <div class="mode-tabs">
+        <button type="button" class="tab-btn active" id="btn-none" onclick="selectMainMode('none')">기본 모드 (각자 랜덤)</button>
+        <button type="button" class="tab-btn" id="btn-pair" onclick="selectMainMode('mixed')">짝꿍 모드 (자동 매칭)</button>
+    </div>
+
+    <form action="/generate" method="POST" id="seatForm" onsubmit="appendDisabledSeats()">
+        <input type="hidden" name="pair_mode" id="pair_mode_input" value="none">
+        <input type="hidden" name="disabled_seats" id="disabled_seats_input" value="">
+
+        <div class="setting-card">
+            <div class="section-title">📐 교실 배치도 디자인 (크기 지정 후 칸을 클릭해 통로로 설정하세요)</div>
+            <div class="input-group" style="margin-bottom: 10px;">
+                <div class="input-item">
+                    <label>↕️ 최대 세로 행(Row) 수</label>
+                    <input type="number" name="rows" id="input_rows" min="1" value="5" oninput="rebuildGrid(); syncStorage('rows', this.value);" required>
+                </div>
+                <div class="input-item">
+                    <label>↔️ 최대 가로 열(Column) 수</label>
+                    <input type="number" name="cols" id="input_cols" min="1" value="5" oninput="rebuildGrid(); syncStorage('cols', this.value);" required>
+                </div>
+            </div>
+            
+            <div id="layout-designer" class="grid-designer"></div>
+        </div>
+
+        <div id="pair-detail-section" class="setting-card hidden">
+            <div class="section-title">🤝 짝꿍 조합 방식</div>
+            <div class="pair-options">
+                <label class="pair-opt-card"><input type="radio" name="pair_sub_mode" value="mixed" checked onclick="updateModeValue(this.value)"> 남녀 혼합 랜덤</label>
+                <label class="pair-opt-card"><input type="radio" name="pair_sub_mode" value="same_male" onclick="updateModeValue(this.value)"> 남남(男男) 랜덤</label>
+                <label class="pair-opt-card"><input type="radio" name="pair_sub_mode" value="same_female" onclick="updateModeValue(this.value)"> 여여(女女) 랜덤</label>
+                <label class="pair-opt-card"><input type="radio" name="pair_sub_mode" value="pure_random" onclick="updateModeValue(this.value)"> 성별 무관 랜덤</label>
+            </div>
+        </div>
+
+        <div class="input-group">
+            <div class="input-item" style="border-left: 4px solid #3b82f6; padding-left: 15px;">
+                <label>👦 남학생 명단 (한 줄에 하나)</label>
+                <textarea name="male_students" id="input_male" placeholder="철수&#10;민수" oninput="syncStorage('male_students', this.value);"></textarea>
+            </div>
+            <div class="input-item" style="border-left: 4px solid #ef4444; padding-left: 15px;">
+                <label>👧 여학생 명단 (한 줄에 하나)</label>
+                <textarea name="female_students" id="input_female" placeholder="영희&#10;수진" oninput="syncStorage('female_students', this.value);"></textarea>
+            </div>
+        </div>
+
+        <div class="setting-card">
+            <div class="section-title">📌 특정 자리 고정 (선택)</div>
+            <textarea name="fixed_seats" id="input_fixed" placeholder="이름:행,열 (예: 철수:1,1)" style="min-height: 50px;" oninput="syncStorage('fixed_seats', this.value);"></textarea>
+        </div>
+
+        <button type="submit" class="submit-btn">🎲 배정 시작하기</button>
+    </form>
+</div>
+
+<script>
+    const currentUsername = "{{ user.username }}";
+    const uKey = (key) => currentUsername + "_" + key;
+
+    function syncStorage(key, value) {
+        localStorage.setItem(uKey(key), value);
+    }
+
+    window.onload = function() {
+        if(localStorage.getItem(uKey('rows'))) document.getElementById('input_rows').value = localStorage.getItem(uKey('rows'));
+        if(localStorage.getItem(uKey('cols'))) document.getElementById('input_cols').value = localStorage.getItem(uKey('cols'));
+        if(localStorage.getItem(uKey('male_students'))) document.getElementById('input_male').value = localStorage.getItem(uKey('male_students'));
+        if(localStorage.getItem(uKey('female_students'))) document.getElementById('input_female').value = localStorage.getItem(uKey('female_students'));
+        if(localStorage.getItem(uKey('fixed_seats'))) document.getElementById('input_fixed').value = localStorage.getItem(uKey('fixed_seats'));
+        
+        const savedMainMode = localStorage.getItem(uKey('main_mode')) || 'none';
+        selectMainMode(savedMainMode);
+        rebuildGrid(); // 초기 그리드 빌드
+    };
+
+    // 🔮 [핵심 로직] 행/열 숫자에 맞춰 실시간으로 클릭 가능한 교실 모양 격자 그리기
+    function rebuildGrid() {
+        const rows = parseInt(document.getElementById('input_rows').value) || 1;
+        const cols = parseInt(document.getElementById('input_cols').value) || 1;
+        const designer = document.getElementById('layout-designer');
+        
+        designer.innerHTML = '';
+        designer.style.gridTemplateColumns = `repeat(${cols}, 60px)`;
+
+        for (let r = 1; r <= rows; r++) {
+            for (let c = 1; c <= cols; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell active';
+                cell.id = `cell_${r}_${c}`;
+                cell.innerText = `${r}-${c}\n[책상]`;
+                
+                // 클릭 시 책상 <-> 통로(제외석) 상태 전환
+                cell.onclick = function() {
+                    if (this.classList.contains('active')) {
+                        this.classList.remove('active');
+                        this.classList.add('disabled');
+                        this.innerText = `${r}-${c}\n[통로]`;
+                    } else {
+                        this.classList.remove('disabled');
+                        this.classList.add('active');
+                        this.innerText = `${r}-${c}\n[책상]`;
+                    }
+                };
+                designer.appendChild(cell);
+            }
+        }
+    }
+
+    // 폼 제출 전 통로(disabled)로 선택된 칸들의 좌표를 모아서 서버로 전달할 준비를 함
+    function appendDisabledSeats() {
+        const disabledCells = document.querySelectorAll('.grid-cell.disabled');
+        const coords = [];
+        disabledCells.forEach(cell => {
+            const [_, r, c] = cell.id.split('_');
+            coords.push(`${r},${c}`);
+        });
+        document.getElementById('disabled_seats_input').value = coords.join('|');
+    }
+
+    function selectMainMode(mode) {
+        const input = document.getElementById('pair_mode_input');
+        const pairSection = document.getElementById('pair-detail-section');
+        const btnNone = document.getElementById('btn-none');
+        const btnPair = document.getElementById('btn-pair');
+        if(!input || !pairSection) return;
+
+        localStorage.setItem(uKey('main_mode'), mode);
+
+        if (mode === 'none') {
+            input.value = 'none';
+            pairSection.classList.add('hidden');
+            if(btnNone) btnNone.classList.add('active');
+            if(btnPair) btnPair.classList.remove('active');
+        } else {
+            const checkedRadio = document.querySelector('input[name="pair_sub_mode"]:checked');
+            input.value = checkedRadio ? checkedRadio.value : 'mixed';
+            pairSection.classList.remove('hidden');
+            if(btnPair) btnPair.classList.add('active');
+            if(btnNone) btnNone.classList.remove('active');
+        }
+    }
+
+    function updateModeValue(val) {
+        if(document.getElementById('pair_mode_input')) {
+            document.getElementById('pair_mode_input').value = val;
+        }
+    }
+
+    function quickLoadStudents(selectObj) {
+        const selectedOption = selectObj.options[selectObj.selectedIndex];
+        if(!selectedOption.value) return;
+        
+        const maleData = selectedOption.getAttribute('data-male') || '';
+        const femaleData = selectedOption.getAttribute('data-female') || '';
+        
+        if(document.getElementById('input_male')) document.getElementById('input_male').value = maleData;
+        if(document.getElementById('input_female')) document.getElementById('input_female').value = femaleData;
+        
+        localStorage.setItem(uKey('male_students'), maleData);
+        localStorage.setItem(uKey('female_students'), femaleData);
+        alert(selectedOption.value + " 명단을 성공적으로 불러왔습니다!");
+    }
+</script>
+</body>
+</html>

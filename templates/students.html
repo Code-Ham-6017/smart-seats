@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>반별 학생 명단 관리</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #f3f4f6; margin: 0; padding: 20px; }
+        .container { max-width: 700px; margin: 40px auto; background: white; border-radius: 20px; padding: 40px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        h1 { text-align: center; margin-bottom: 30px; font-size: 24px; }
+        .form-group { margin-bottom: 20px; }
+        label { font-weight: 600; display: block; margin-bottom: 8px; }
+        input[type="text"], textarea { width: 100%; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; box-sizing: border-box; font-size: 15px; }
+        textarea { min-height: 120px; resize: vertical; }
+        .btn-save { width: 100%; background: #10b981; color: white; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: 700; cursor: pointer; }
+        .btn-save:hover { background: #059669; }
+        .list-section { margin-top: 40px; border-top: 2px dashed #e5e7eb; padding-top: 20px; }
+        .list-title { font-weight: 700; font-size: 18px; margin-bottom: 15px; }
+        .class-badge { display: inline-block; background: #e0e7ff; color: #4338ca; padding: 8px 14px; border-radius: 20px; font-weight: 600; margin-right: 8px; margin-bottom: 8px; cursor: pointer; }
+        .class-badge:hover { background: #c7d2fe; }
+        .back-link { display: inline-block; margin-top: 20px; color: #4f46e5; text-decoration: none; font-weight: 600; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📝 반별 학생 명단 관리 등록</h1>
+    
+    <form action="/students/save" method="POST">
+        <div class="form-group">
+            <label>🏫 학년 / 반 이름</label>
+            <input type="text" name="class_name" id="c_name" placeholder="예: 1학년 3반" required>
+        </div>
+        <div style="display: flex; gap: 15px;" class="form-group">
+            <div style="flex: 1;">
+                <label>👦 남학생 명단 (줄바꿈 구분)</label>
+                <textarea name="male_students" id="m_list" placeholder="철수&#10;민수"></textarea>
+            </div>
+            <div style="flex: 1;">
+                <label>👧 여학생 명단 (줄바꿈 구분)</label>
+                <textarea name="female_students" id="f_list" placeholder="영희&#10;수진"></textarea>
+            </div>
+        </div>
+        <button type="submit" class="btn-save">💾 명단 저장 / 업데이트</button>
+    </form>
+
+    <div class="list-section">
+        <div class="list-title">📌 등록된 반 목록 (클릭 시 자동 입력 양식 로드)</div>
+        <div id="saved-classes">
+            {% for c in classes %}
+                <span class="class-badge" onclick="loadClassData('{{ c.class_name }}', `{{ c.male_students }}`, `{{ c.female_students }}`)">
+                    {{ c.class_name }}
+                </span>
+            {% else %}
+                <p style="color: #6b7280; font-size: 14px;">등록된 명단이 없습니다. 상단에서 새로 등록해 주세요.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <a href="/" class="back-link">← 메인 홈화면으로 이동</a>
+</div>
+
+<script>
+    // 배정 창으로 쉽게 연동하기 위해 클릭 시 폼에 데이터를 매핑해 주는 헬퍼 함수
+    function loadClassData(name, male, female) {
+        document.getElementById('c_name').value = name;
+        document.getElementById('m_list').value = male;
+        document.getElementById('f_list').value = female;
+    }
+</script>
+</body>
+</html>
