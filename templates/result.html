@@ -64,6 +64,13 @@
         .btn-sub:hover { background: #d1d5db; }
         .qr-box { text-align: center; font-size: 13px; font-weight: 600; color: #4b5563; }
         .qr-box img { width: 100px; height: 100px; display: block; margin-bottom: 5px; border: 1px solid var(--border-color); border-radius: 8px; }
+        /* 통로 칸을 아예 안 보이게 감추는 마법의 스타일 */
+    .seat-cell.invisible-path {
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        pointer-events: none; /* 마우스 반응도 없앰 */
+    }
     </style>
 </head>
 <body>
@@ -72,12 +79,24 @@
     <h1>🪑 자리 배정 결과 안내</h1>
     <p class="notice">💡 의정 조율 필요 시 이름을 드래그앤드롭하여 수동 교체할 수 있습니다. 복도 지정 구역은 투명하게 보호됩니다.</p>
 
-    <table class="seat-table">
+<table class="seat-table">
         {% for row in seats %}
         <tr>
             {% for student in row %}
-                {% if student == "" or student is none %}
-                    <td class="seat-cell path-way"></td>
+                {# 1. 통로인 경우 (데이터가 없거나, 공백이거나, 통로 기호 'X'인 경우) #}
+                {% if student == "" or student is none or student == "X" or student.strip() == "" %}
+                    <td class="seat-cell invisible-path"></td>
+                
+                {# 2. 사람이 없는 빈 책상인 경우 (이 자리에 '빈자리'라고 표시하고 싶다면, 파이썬에서 별도의 키워드를 주거나 처리해야 합니다) #}
+                {# 만약 현재 화면에서 "빈자리"라고 나오는 글자가 실제 학생 이름이 아니라 서버에서 넘어온 데이터라면 아래처럼 매칭합니다. #}
+                {% elif student == "빈자리" %}
+                    <td class="seat-cell" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+                        <div class="student-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)">
+                            빈자리
+                        </div>
+                    </td>
+                
+                {# 3. 실제 학생이 앉은 자리인 경우 #}
                 {% else %}
                     <td class="seat-cell" ondragover="allowDrop(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
                         <div class="student-card" draggable="true" ondragstart="dragStart(event)" ondragend="dragEnd(event)">
@@ -133,31 +152,22 @@
         }
     }
 
-    function drop(e) {
+function drop(e) {
         e.preventDefault();
         const cell = e.target.closest('.seat-cell');
-        if (!cell || cell.classList.contains('path-way')) return;
+        
+        // 안 보이는 통로 칸이거나 칸을 찾지 못했다면 이동 무시
+        if (!cell || cell.classList.contains('invisible-path')) return;
         
         cell.classList.remove('drag-over');
-        const targetStudent = cell.querySelector('.student-card');
+        
+        const targetCard = cell.querySelector('.student-card');
         const sourceCell = draggedElement.parentElement;
 
-        if (targetStudent) {
-            sourceCell.appendChild(targetStudent);
+        if (targetCard && targetCard !== draggedElement) {
+            sourceCell.appendChild(targetCard);
         }
         cell.appendChild(draggedElement);
-    }
-
-    function reRollSeats() {
-        if (window.opener) {
-            const parentForm = window.opener.document.getElementById('seatForm');
-            if (parentForm) {
-                parentForm.submit();
-                window.close();
-                return;
-            }
-        }
-        window.location.reload();
     }
 </script>
 </body>
