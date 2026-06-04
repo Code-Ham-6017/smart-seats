@@ -107,7 +107,7 @@ def index():
 
 @app.route('/generate', methods=['POST'])
 def generate():
-    # 1. 프론트엔드에서 넘어온 데이터 받기
+    # 1. 화면에서 넘어온 기본 데이터 받기
     pair_mode = request.form.get('pair_mode', 'none')
     rows = int(request.form.get('rows', 5))
     cols = int(request.form.get('cols', 5))
@@ -116,21 +116,21 @@ def generate():
     female_input = request.form.get('female_students', '')
     fixed_input = request.form.get('fixed_seats', '')
     
-    # 💡 [핵심] 메인 화면 격자판에서 클릭한 복도(통로) 데이터 받아오기
+    # 2. [복도 데이터 파싱] 복도로 지정된 격자 좌표들 정리
     disabled_seats_raw = request.form.get('disabled_seats', '')
     disabled_seats_list = []
     if disabled_seats_raw:
         for coord in disabled_seats_raw.split('|'):
             if ',' in coord:
                 r, c = coord.split(',')
-                # 파이썬 리스트 인덱스는 0부터 시작하므로 입력값(1~N)에서 1을 빼줍니다.
+                # 파이썬 리스트는 0부터 시작하므로 입력값에서 1을 뺍니다.
                 disabled_seats_list.append((int(r) - 1, int(c) - 1))
 
-    # 2. 학생 명단 정리 (줄바꿈 기준 공백 제거)
+    # 3. 학생 명단 줄바꿈 기준으로 깔끔하게 리스트로 정리
     male_students = [s.strip() for s in male_input.split('\n') if s.strip()]
     female_students = [s.strip() for s in female_input.split('\n') if s.strip()]
 
-    # 3. 고정석 데이터 파싱 (이름:행,열)
+    # 4. 고정석 데이터 파싱 (이름:행,열)
     fixed_seats_dict = {}
     if fixed_input.strip():
         for item in fixed_input.split('\n'):
@@ -140,9 +140,9 @@ def generate():
                     r, c = coord.split(',')
                     fixed_seats_dict[name.strip()] = (int(r) - 1, int(c) - 1)
                 except ValueError:
-                    continue # 잘못된 입력 형식은 무시
+                    continue
 
-    # 4. 업데이트된 seat_logic의 shuffle_seats 함수 호출
+    # 5. seat_logic.py에 업데이트한 shuffle_seats 함수 작동시키기
     try:
         seats = shuffle_seats(
             male_students, 
@@ -154,26 +154,40 @@ def generate():
             disabled_seats_list
         )
     except Exception as e:
-        print(f"배정 로직 에러 발생: {e}")
-        return f"자리 배정 중 오류가 발생했습니다: {e}", 500
+        print(f"❌ 배정 로직 수행 중 에러 발생: {e}")
+        return f"배정 로직 에러: {e}", 500
 
-    # 5. 데이터베이스 저장 및 QR 코드 생성 로직 (기존 코드 유지)
-    # (선생님의 기존 app.py 코드에 맞게 seat_id와 qr_filename을 생성하고 리턴하는 부분입니다)
-    # 예시:
-    # seat_id = save_to_db(seats) 
-    # qr_filename = generate_qr(seat_id)
-    
-    # 임시 테스트용 리턴 (기존의 실제 return 구문으로 유지하셔도 됩니다)
-    import uuid
-    dummy_id = str(uuid.uuid4()[:8])
-    return render_template('result.html', seats=seats, seat_id=dummy_id, qr_filename="")
-@app.route("/result/<int:seat_id>")
-def result(seat_id):
-    if not get_current_user(): return redirect(url_for("login"))
-    record = get_history_by_id(seat_id)
-    if not record: return "기록 없음", 404
-    seats = json.loads(record["seat_data"])
-    return render_template("result.html", seats=seats, seat_id=seat_id, qr_filename=f"qr_{seat_id}.png")
+    # 6. 기존에 사용하던 데이터베이스 저장 및 QR 코드 연동 로직
+    try:
+        import uuid
+        import qrcode
+        import os
+
+        # 고유 ID 생성 및 DB 저장
+        seat_id = str(uuid.uuid4())[:8]
+        # 기존 database.py 규칙에 맞게 배치 데이터(seats)만 쏙 넘겨줍니다.
+        save_seat_history(seats)
+        
+        # QR 코드 파일 생성 및 저장
+        qr_filename = f"qr_{seat_id}.png"
+        qr_path = os.path.join('static', qr_filename)
+        
+        # 로컬 혹은 실제 배포 서버 도메인 주소 자동 매칭
+        base_url = request.host_url
+        qr_data = f"{base_url}view/{seat_id}"
+        
+        qr = qrcode.QRCode(version=1, box_size=10, border=4)
+        qr.add_data(qr_data)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        img.save(qr_path)
+        
+    except Exception as e:
+        print(f"❌ DB 저장 또는 QR 생성 중 에러 발생: {e}")
+        return f"시스템 저장 에러: {e}", 500
+
+    # 7. 완성된 결과를 들고 결과창(result.html) 열어주기
+    return render_template('result.html', seats=seats, seat_id=seat_id, qr_filename=qr_filename)
 
 # 과거 목록 조회
 @app.route("/history")
