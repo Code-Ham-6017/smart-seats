@@ -1,114 +1,132 @@
 import random
 
-def are_adjacent(pos1, pos2):
-    r1, c1 = pos1
-    r2, c2 = pos2
-    return r1 == r2 and abs(c1 - c2) == 1
-
-def create_grid(rows, cols):
-    return [[None for _ in range(cols)] for _ in range(rows)]
-
-def validate_fixed_students(students, fixed_seats):
-    for student in fixed_seats:
-        if student not in students:
-            raise Exception(f"[고정 자리 오류] '{student}' 학생이 학생 목록에 없습니다.")
-
-def validate_pairs(students, pairs):
-    for a, b in pairs:
-        if a not in students or b not in students:
-            raise Exception(f"[짝꿍 오류] 입력된 명단과 짝꿍 데이터가 일치하지 않습니다.")
-
-def validate_pair_conflicts(fixed_seats, pairs):
-    for a, b in pairs:
-        if a in fixed_seats and b in fixed_seats:
-            if not are_adjacent(fixed_seats[a], fixed_seats[b]):
-                raise Exception(f"[충돌 오류] 짝꿍인 '{a}'와 '{b}'의 고정 자리가 서로 옆자리가 아닙니다.")
-
-def place_fixed_students(grid, fixed_seats):
-    placed = {}
-    for student, pos in fixed_seats.items():
-        grid[pos[0]][pos[1]] = student
-        placed[student] = pos
-    return placed
-
-def find_adjacent_empty(grid, r, c):
-    rows, cols = len(grid), len(grid[0])
-    candidates = []
-    for dc in [-1, 1]:
-        nr, nc = r, c + dc
-        if 0 <= nr < rows and 0 <= nc < cols and grid[nr][nc] is None:
-            candidates.append((nr, nc))
-    return candidates
-
-def place_pairs(grid, pairs, fixed_seats):
-    placed_students = {}
+def shuffle_seats(male_students, female_students, rows, cols, pair_mode, fixed_seats_dict, disabled_seats_list):
+    # 1. 전체 격자판을 None으로 초기화 (rows x cols)
+    grid = [[None for _ in range(cols)] for _ in range(rows)]
     
-    # 1차: 한 명만 고정된 커플 선배치
-    for a, b in pairs:
-        if a in fixed_seats and b not in fixed_seats:
-            r, c = fixed_seats[a]
-            options = find_adjacent_empty(grid, r, c)
-            if not options: raise Exception(f"[배치 실패] 공간 부족")
-            br, bc = random.choice(options)
-            grid[br][bc] = b
-            placed_students[b] = (br, bc)
-        elif b in fixed_seats and a not in fixed_seats:
-            r, c = fixed_seats[b]
-            options = find_adjacent_empty(grid, r, c)
-            if not options: raise Exception(f"[배치 실패] 공간 부족")
-            ar, ac = random.choice(options)
-            grid[ar][ac] = a
-            placed_students[a] = (ar, ac)
+    # 2. 통로(disabled_seats)로 지정된 자리에 'DISABLED_PATH' 표식을 심어둠
+    for r, c in disabled_seats_list:
+        if 0 <= r < rows and 0 <= c < cols:
+            grid[r][c] = 'DISABLED_PATH'
 
-    # 2차: 둘 다 고정되지 않은 일반 자동 커플 배치
-    rows, cols = len(grid), len(grid[0])
-    for a, b in pairs:
-        if a in fixed_seats or b in fixed_seats:
-            continue
-        empty_pairs = []
+    # 3. 고정석(fixed_seats) 먼저 격자판에 배치
+    # 단, 고정석이 통로 자리에 겹치지 않도록 처리
+    all_fixed_students = set()
+    for student, (r, c) in fixed_seats_dict.items():
+        if 0 <= r < rows and 0 <= c < cols:
+            if grid[r][c] != 'DISABLED_PATH':
+                grid[r][c] = student
+                all_fixed_students.add(student)
+
+    # 4. 고정석에 배치된 학생을 제외한 나머지 유동 학생 목록 정리
+    males = [s for s in male_students if s and s not in all_fixed_students]
+    females = [s for s in female_students if s and s not in all_fixed_students]
+    
+    random.shuffle(males)
+    random.shuffle(females)
+
+    # 5. 비어있는(학생도 없고 통로도 아닌) 유동석 좌표 목록 추출
+    available_coords = []
+    for r in range(rows):
+        for c in range(cols):
+            if grid[r][c] is None:
+                available_coords.append((r, c))
+
+    # --- 짝꿍 모드 세부 로직 처리 ---
+    if pair_mode in ['mixed', 'same_male', 'same_female', 'pure_random']:
+        # 가로로 인접한 유동석끼리 짝꿍(Pair) 커플 목록 만들기
+        pairs = []
+        used_coords = set()
+        
         for r in range(rows):
             for c in range(cols - 1):
-                if grid[r][c] is None and grid[r][c+1] is None:
-                    empty_pairs.append(((r, c), (r, c+1)))
-                    
-        if not empty_pairs:
-            raise Exception(f"[배치 실패] 짝꿍을 앉힐 연속된 가로 빈자리가 부족합니다.")
-            
-        chosen = random.choice(empty_pairs)
-        if random.random() < 0.5:
-            grid[chosen[0][0]][chosen[0][1]], grid[chosen[1][0]][chosen[1][1]] = a, b
+                coord1 = (r, c)
+                coord2 = (r, c + 1)
+                if (grid[r][c] is None) and (grid[r][c+1] is None):
+                    if coord1 not in used_coords and coord2 not in used_coords:
+                        pairs.append((coord1, coord2))
+                        used_coords.add(coord1)
+                        used_coords.add(coord2)
+
+        # 나머지 짝을 못 찾은 외톨이 유동석 자리들
+        single_coords = [coord for coord in available_coords if coord not in used_coords]
+        random.shuffle(pairs)
+
+        # ① 남남(男男) 랜덤 모드
+        if pair_mode == 'same_male':
+            for c1, c2 in pairs:
+                if len(males) >= 2:
+                    grid[c1[0]][c1[1]] = males.pop(0)
+                    grid[c2[0]][c2[1]] = males.pop(0)
+                elif len(females) >= 2: # 남학생 동나면 여여 매칭
+                    grid[c1[0]][c1[1]] = females.pop(0)
+                    grid[c2[0]][c2[1]] = females.pop(0)
+                else: # 둘 다 부족하면 남은 사람 아무나
+                    if males: grid[c1[0]][c1[1]] = males.pop(0)
+                    if females: grid[c2[0]][c2[1]] = females.pop(0)
+                    if males: grid[c2[0]][c2[1]] = males.pop(0)
+                    if females and grid[c1[0]][c1[1]] is None: grid[c1[0]][c1[1]] = females.pop(0)
+
+        # ② 여여(女女) 랜덤 모드
+        elif pair_mode == 'same_female':
+            for c1, c2 in pairs:
+                if len(females) >= 2:
+                    grid[c1[0]][c1[1]] = females.pop(0)
+                    grid[c2[0]][c2[1]] = females.pop(0)
+                elif len(males) >= 2: # 여학생 동나면 남남 매칭
+                    grid[c1[0]][c1[1]] = males.pop(0)
+                    grid[c2[0]][c2[1]] = males.pop(0)
+                else:
+                    if females: grid[c1[0]][c1[1]] = females.pop(0)
+                    if males: grid[c2[0]][c2[1]] = males.pop(0)
+                    if females: grid[c2[0]][c2[1]] = females.pop(0)
+                    if males and grid[c1[0]][c1[1]] is None: grid[c1[0]][c1[1]] = males.pop(0)
+
+        # ③ 남녀 혼합 랜덤 모드
+        elif pair_mode == 'mixed':
+            for c1, c2 in pairs:
+                if males and females:
+                    grid[c1[0]][c1[1]] = males.pop(0)
+                    grid[c2[0]][c2[1]] = females.pop(0)
+                elif len(males) >= 2:
+                    grid[c1[0]][c1[1]] = males.pop(0)
+                    grid[c2[0]][c2[1]] = males.pop(0)
+                elif len(females) >= 2:
+                    grid[c1[0]][c1[1]] = females.pop(0)
+                    grid[c2[0]][c2[1]] = females.pop(0)
+
+        # ④ 성별 무관 랜덤 모드 (아무나 섞어서 짝꿍)
         else:
-            grid[chosen[0][0]][chosen[0][1]], grid[chosen[1][0]][chosen[1][1]] = b, a
-            
-    return placed_students
+            all_remain = males + females
+            random.shuffle(all_remain)
+            for c1, c2 in pairs:
+                if len(all_remain) >= 2:
+                    grid[c1[0]][c1[1]] = all_remain.pop(0)
+                    grid[c2[0]][c2[1]] = all_remain.pop(0)
+                elif len(all_remain) == 1:
+                    grid[c1[0]][c1[1]] = all_remain.pop(0)
+            males = [s for s in all_remain] # 남은 사람 대입
+            females = []
 
-def fill_remaining_students(grid, students, fixed_seats, pair_students):
-    remaining = [s for s in students if s not in fixed_seats and s not in pair_students]
-    random.shuffle(remaining)
-    idx = 0
-    for r in range(len(grid)):
-        for c in range(len(grid[0])):
-            if grid[r][c] is None:
-                if idx >= len(remaining): return
-                grid[r][c] = remaining[idx]
-                idx += 1
+        # 짝꿍 다 채우고 남은 자투리 학생들을 단독석(single_coords)에 채우기
+        left_students = males + females
+        random.shuffle(left_students)
+        for coord in single_coords:
+            if left_students:
+                grid[coord[0]][coord[1]] = left_students.pop(0)
 
-def generate_seats(students, rows, cols, fixed_seats=None, pairs=None):
-    students = [s.strip() for s in students if s.strip()]
-    fixed_seats = fixed_seats or {}
-    pairs = pairs or []
+    # 6. 기본 모드 (성별 구분 없는 각자 전체 무작위 배정)
+    else:
+        left_students = males + females
+        random.shuffle(left_students)
+        for coord in available_coords:
+            if left_students:
+                grid[coord[0]][coord[1]] = left_students.pop(0)
 
-    if len(students) > (rows * cols):
-        raise Exception("학생 수가 총 좌석 수보다 많습니다.")
+    # 7. 최종 처리: 'DISABLED_PATH'로 채워진 복도 공간을 템플릿 출력을 위해 공백문자("")로 변경
+    for r in range(rows):
+        for c in range(cols):
+            if grid[r][c] == 'DISABLED_PATH':
+                grid[r][c] = ""
 
-    validate_fixed_students(students, fixed_seats)
-    validate_pairs(students, pairs)
-    validate_pair_conflicts(fixed_seats, pairs)
-
-    grid = create_grid(rows, cols)
-    place_fixed_students(grid, fixed_seats)
-    place_pairs(grid, pairs, fixed_seats)
-    
-    all_pair_students = set([p[0] for p in pairs] + [p[1] for p in pairs])
-    fill_remaining_students(grid, students, fixed_seats, all_pair_students)
     return grid
