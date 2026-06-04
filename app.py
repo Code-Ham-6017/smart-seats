@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, send_file, session
 from database import init_db, save_seat_history, get_all_history, get_history_by_id, init_user_db, register_user, login_user, get_all_student_lists, save_student_list
-from seat_logic import generate_seats
+from seat_logic import shuffle_seats
 import json
 import os
 import qrcode
@@ -151,7 +151,7 @@ def generate():
                     if name.strip() in all_students: fixed_seats[name.strip()] = (r, c)
                 except: continue
 
-        seats = generate_seats(all_students, rows, cols, fixed_seats, pairs)
+        seats = shuffle_seats(all_students, rows, cols, fixed_seats, pairs)
         seat_id = save_seat_history(seats)
         
         os.makedirs("static", exist_ok=True)
