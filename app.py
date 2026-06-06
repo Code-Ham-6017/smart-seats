@@ -125,8 +125,17 @@ def index():
 def history():
     user = get_current_user()
     if not user: return redirect(url_for("login"))
-    records = get_all_history()
-    return render_template("history.html", records=records, user=user)
+    
+    # 상단바 템플릿 대응용 구조 통일
+    user_info = {'username': user['username']}
+    
+    try:
+        records = get_all_history()
+    except Exception as e:
+        print(f"❌ 과거 기록 조회 중 DB 에러: {e}")
+        return f"데이터베이스 조회 에러: {e}. 데이터베이스 파일(history.db)을 새로 고쳤다면 과거 기록 테이블 구조도 초기화해야 합니다.", 500
+        
+    return render_template("history.html", records=records, user=user_info)
 
 @app.route("/delete_multiple", methods=["POST"])
 def delete_multiple():
@@ -134,6 +143,7 @@ def delete_multiple():
     if not user or user["role"] != "teacher": return "권한 없음", 403
     selected_ids = request.form.getlist("record_ids")
     if selected_ids:
+        import sqlite3  # 안전하게 내부 임포트
         conn = sqlite3.connect("history.db")
         cursor = conn.cursor()
         cursor.execute(f"DELETE FROM seat_history WHERE id IN ({','.join('?' for _ in selected_ids)})", tuple(selected_ids))
@@ -144,19 +154,27 @@ def delete_multiple():
 def delete_all():
     user = get_current_user()
     if not user or user["role"] != "teacher": return "권한 없음", 403
+    import sqlite3  # 안전하게 내부 임포트
     conn = sqlite3.connect("history.db")
     cursor = conn.cursor()
     cursor.execute("DELETE FROM seat_history")
     conn.commit(); conn.close()
     return redirect(url_for("history"))
 
-@app.route("/pdf/<int:seat_id>")
+# 🌟 [수정] uuid 문자열을 인식할 수 있도록 <int:>를 제거했습니다.
+@app.route("/pdf/<seat_id>")
 def download_pdf(seat_id):
     if not get_current_user(): return redirect(url_for("login"))
+    import json
+    from flask import send_file
+    
     record = get_history_by_id(seat_id)
     if not record: return "기록 없음", 404
-    return send_file(create_pdf(json.loads(record["seat_data"]), seat_id), as_attachment=True, download_name=f"seats_{seat_id}.pdf")
-
+    
+    # 💡 database.py의 컬럼명 규격에 맞게 꺼내오기 (seats 또는 seat_data)
+    seats_json = record["seats"] if "seats" in record.keys() else record["seat_data"]
+    
+    return send_file(create_pdf(json.loads(seats_json), seat_id), as_attachment=True, download_name=f"seats_{seat_id}.pdf")
 # --- 📝 명단 관리 전용 라우터 2개 ---
 @app.route("/students")
 def students_management():
@@ -305,11 +323,44 @@ def generate():
     return render_template('result.html', seats=seats, seat_id=seat_id, qr_filename=qr_filename)
 
 if __name__ == "__main__":
-    # 🌟 서버가 켜지기 전에 테이블들을 확실하게 만들어 줍니다.
-    from database import init_db, init_user_db
-    init_db()
-    init_user_db()
+    # 🌟 [강제 테이블 생성 장치] 서버가 켜질 때 테이블을 무조건 직접 만듭니다.
+    import sqlite3
+    try:
+        conn = sqlite3.connect("history.db")
+        cursor = conn.cursor()
+        
+        # 1. 과거 배정 기록 테이블 강제 생성
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS seat_history (
+                id TEXT PRIMARY KEY,
+                teacher_id TEXT,
+                school TEXT,
+                grade TEXT,
+                class_num TEXT,
+                seats TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # 2. 회원가입 유저 테이블 강제 생성
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                school TEXT,
+                grade TEXT,
+                class_num TEXT,
+                role TEXT DEFAULT 'teacher'
+            )
+        """)
+        
+        conn.commit()
+        conn.close()
+        print("✅ [성공] seat_history 및 users 테이블 강제 생성 완료!")
+        
+    except Exception as e:
+        print(f"❌ DB 강제 생성 중 에러 발생: {e}")
     
+    # 서버 실행
     app.run(debug=True, port=5000)
-
-    create_pdf
